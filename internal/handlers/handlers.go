@@ -50,7 +50,7 @@ func (h *Handler) RegisterMasterToken(c *gin.Context) {
 	}
 
 	// Register new master token
-	token, err := h.auth.RegisterMasterToken()
+	token, err := h.auth.RegisterMasterToken(req.Issuer, req.AccountName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to register master token",

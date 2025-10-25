@@ -4,37 +4,28 @@ import (
 	"crypto/rand"
 	"encoding/base32"
 	"fmt"
-	"sync"
 	"time"
+
+	"otp-basic/internal/database"
 
 	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
 )
 
-type MasterToken struct {
-	ID        string    `json:"id"`
-	Secret    string    `json:"secret"`
-	CreatedAt time.Time `json:"created_at"`
-	IsActive  bool      `json:"is_active"`
-}
+// MasterToken is an alias for database.MasterToken for backward compatibility
+type MasterToken = database.MasterToken
 
 type AuthManager struct {
-	masterTokens map[string]*MasterToken
-	otpSecrets   map[string]string // user_id -> secret
-	mutex        sync.RWMutex
+	db *database.DB
 }
 
-func NewAuthManager() *AuthManager {
+func NewAuthManager(db *database.DB) *AuthManager {
 	return &AuthManager{
-		masterTokens: make(map[string]*MasterToken),
-		otpSecrets:   make(map[string]string),
+		db: db,
 	}
 }
 
-func (am *AuthManager) RegisterMasterToken() (*MasterToken, error) {
-	am.mutex.Lock()
-	defer am.mutex.Unlock()
-
+func (am *AuthManager) RegisterMasterToken(issuer, accountName string) (*MasterToken, error) {
 	// Generate a random secret for TOTP
 	secret, err := am.generateSecret()
 	if err != nil {
@@ -42,36 +33,38 @@ func (am *AuthManager) RegisterMasterToken() (*MasterToken, error) {
 	}
 
 	token := &MasterToken{
-		ID:        uuid.New().String(),
-		Secret:    secret,
-		CreatedAt: time.Now(),
-		IsActive:  true,
+		ID:          uuid.New().String(),
+		Secret:      secret,
+		CreatedAt:   time.Now(),
+		IsActive:    true,
+		Issuer:      &issuer,
+		AccountName: &accountName,
 	}
 
-	am.masterTokens[token.ID] = token
-	am.otpSecrets[token.ID] = secret
+	// Save to database
+	if err := am.db.CreateMasterToken(token); err != nil {
+		return nil, fmt.Errorf("failed to save master token to database: %w", err)
+	}
 
 	return token, nil
 }
 
 func (am *AuthManager) ValidateOTP(userID, otpCode string) bool {
-	am.mutex.RLock()
-	secret, exists := am.otpSecrets[userID]
-	am.mutex.RUnlock()
-
-	if !exists {
+	// Get master token from database
+	token, err := am.db.GetMasterToken(userID)
+	if err != nil || token == nil || !token.IsActive {
 		return false
 	}
 
-	return totp.Validate(otpCode, secret)
+	return totp.Validate(otpCode, token.Secret)
 }
 
 func (am *AuthManager) GetMasterToken(userID string) (*MasterToken, bool) {
-	am.mutex.RLock()
-	defer am.mutex.RUnlock()
-
-	token, exists := am.masterTokens[userID]
-	return token, exists
+	token, err := am.db.GetMasterToken(userID)
+	if err != nil || token == nil {
+		return nil, false
+	}
+	return token, true
 }
 
 func (am *AuthManager) generateSecret() (string, error) {
@@ -85,29 +78,25 @@ func (am *AuthManager) generateSecret() (string, error) {
 }
 
 func (am *AuthManager) GenerateOTPCode(userID string) (string, error) {
-	am.mutex.RLock()
-	secret, exists := am.otpSecrets[userID]
-	am.mutex.RUnlock()
-
-	if !exists {
-		return "", fmt.Errorf("user not found")
+	// Get master token from database
+	token, err := am.db.GetMasterToken(userID)
+	if err != nil || token == nil || !token.IsActive {
+		return "", fmt.Errorf("user not found or inactive")
 	}
 
-	return totp.GenerateCode(secret, time.Now())
+	return totp.GenerateCode(token.Secret, time.Now())
 }
 
 func (am *AuthManager) GetQRCodeURL(userID, issuer, accountName string) (string, error) {
-	am.mutex.RLock()
-	secret, exists := am.otpSecrets[userID]
-	am.mutex.RUnlock()
-
-	if !exists {
-		return "", fmt.Errorf("user not found")
+	// Get master token from database
+	token, err := am.db.GetMasterToken(userID)
+	if err != nil || token == nil || !token.IsActive {
+		return "", fmt.Errorf("user not found or inactive")
 	}
 
 	// Generate QR code URL manually
 	url := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30",
-		issuer, accountName, secret, issuer)
+		issuer, accountName, token.Secret, issuer)
 
 	return url, nil
 }

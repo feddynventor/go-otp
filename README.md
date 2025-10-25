@@ -1,6 +1,6 @@
 # OTP Basic - REST API Server with OTP Authentication
 
-A secure REST API server in Go that requires OTP (One-Time Password) authentication for all protected endpoints. Includes a separate client for OTP generation and testing.
+A secure REST API server in Go that requires OTP (One-Time Password) authentication for all protected endpoints. Includes a separate client for OTP generation and testing, with PostgreSQL database integration for persistent storage.
 
 ## Features
 
@@ -10,6 +10,8 @@ A secure REST API server in Go that requires OTP (One-Time Password) authenticat
 - **QR Code Generation**: Automatic QR code URL generation for easy setup with authenticator apps
 - **RESTful API**: Clean REST API design with proper HTTP status codes
 - **Client Application**: Separate client for OTP generation and API testing
+- **PostgreSQL Integration**: Persistent storage with database migrations
+- **Docker Support**: Easy database setup with Docker Compose
 
 ## Project Structure
 
@@ -25,10 +27,18 @@ otp-basic/
 │   ├── auth/
 │   │   ├── auth.go             # Authentication manager
 │   │   └── middleware.go       # OTP middleware
-│   └── handlers/
-│       └── handlers.go         # API handlers
+│   ├── handlers/
+│   │   └── handlers.go         # API handlers
+│   └── database/
+│       └── database.go         # Database layer
+├── migrations/
+│   ├── 001_create_master_tokens_table.up.sql
+│   └── 001_create_master_tokens_table.down.sql
 ├── go.mod                      # Go module definition
+├── go.sum                      # Go module checksums
 ├── Makefile                    # Build and run commands
+├── docker-compose.yml          # PostgreSQL setup
+├── config.example.env          # Configuration template
 └── README.md                   # This file
 ```
 
@@ -41,10 +51,52 @@ otp-basic/
    make deps
    ```
 
-2. **Build the applications**:
+2. **Start PostgreSQL database**:
+   ```bash
+   make db-up
+   ```
+
+3. **Build the applications**:
    ```bash
    make build
    ```
+
+### Database Setup
+
+The application uses PostgreSQL for persistent storage. You can start the database using Docker Compose:
+
+```bash
+# Start PostgreSQL
+make db-up
+
+# Stop PostgreSQL
+make db-down
+
+# Reset database (stop, start, and run migrations)
+make db-reset
+```
+
+The database will be available at `localhost:5432` with the following default credentials:
+- Database: `otp_basic`
+- Username: `postgres`
+- Password: `postgres`
+
+### Configuration
+
+Copy the example configuration file and modify as needed:
+
+```bash
+cp config.example.env .env
+```
+
+Available environment variables:
+- `DB_HOST`: Database host (default: localhost)
+- `DB_PORT`: Database port (default: 5432)
+- `DB_USER`: Database username (default: postgres)
+- `DB_PASSWORD`: Database password (default: postgres)
+- `DB_NAME`: Database name (default: otp_basic)
+- `DB_SSLMODE`: SSL mode (default: disable)
+- `PORT`: Server port (default: 8080)
 
 ## Usage
 
@@ -87,27 +139,32 @@ The client provides an interactive interface with the following commands:
 
 ### Example Workflow
 
-1. **Start the server**:
+1. **Start the database**:
+   ```bash
+   make db-up
+   ```
+
+2. **Start the server**:
    ```bash
    make run-server-bg
    ```
 
-2. **Start the client**:
+3. **Start the client**:
    ```bash
    make run-client
    ```
 
-3. **Register a new user**:
+4. **Register a new user**:
    ```
    > register MyApp user@example.com
    ```
 
-4. **Generate OTP**:
+5. **Generate OTP**:
    ```
    > generate
    ```
 
-5. **Test protected endpoints**:
+6. **Test protected endpoints**:
    ```
    > status
    > data
@@ -211,6 +268,8 @@ Get protected data (example endpoint).
 - **Pquerna OTP**: TOTP implementation
 - **Google UUID**: UUID generation
 - **Golang Crypto**: Cryptographic functions
+- **PostgreSQL Driver**: Database connectivity
+- **Golang Migrate**: Database migrations
 
 ## Development
 
@@ -235,6 +294,12 @@ The server can be configured using environment variables:
 
 - `PORT`: Server port (default: 8080)
 - `GIN_MODE`: Gin mode (default: release)
+- `DB_HOST`: Database host (default: localhost)
+- `DB_PORT`: Database port (default: 5432)
+- `DB_USER`: Database username (default: postgres)
+- `DB_PASSWORD`: Database password (default: postgres)
+- `DB_NAME`: Database name (default: otp_basic)
+- `DB_SSLMODE`: SSL mode (default: disable)
 
 ## Troubleshooting
 

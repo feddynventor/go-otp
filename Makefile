@@ -1,4 +1,4 @@
-.PHONY: build-server build-client run-server run-client clean test
+.PHONY: build-server build-client run-server run-client clean test db-up db-down db-reset
 
 # Build the server
 build-server:
@@ -40,6 +40,16 @@ run-server-bg: build-server
 stop-server:
 	pkill -f otp-server
 
+# Database operations
+db-up:
+	docker-compose up -d postgres
+
+db-down:
+	docker-compose down
+
+db-reset: db-down db-up
+	@echo "Database reset complete"
+
 # Show help
 help:
 	@echo "Available targets:"
@@ -53,4 +63,7 @@ help:
 	@echo "  clean          - Clean build artifacts"
 	@echo "  test           - Run tests"
 	@echo "  deps           - Install dependencies"
+	@echo "  db-up          - Start PostgreSQL database"
+	@echo "  db-down        - Stop PostgreSQL database"
+	@echo "  db-reset       - Reset PostgreSQL database"
 	@echo "  help           - Show this help"

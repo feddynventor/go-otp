@@ -13,7 +13,11 @@ func main() {
 		port = "8080"
 	}
 
-	srv := server.NewServer()
+	srv, err := server.NewServer()
+	if err != nil {
+		log.Fatalf("Failed to create server: %v", err)
+	}
+
 	log.Printf("Starting OTP server on port %s", port)
 	log.Fatal(srv.Run(":" + port))
 }
